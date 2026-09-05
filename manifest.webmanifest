@@ -1,0 +1,18 @@
+{
+  "name": "單車 GPS 降水地圖",
+  "short_name": "單車雨雲",
+  "description": "騎車時看即時與未來 2 小時的 JMA 雷達回波圖，藍點跟隨 GPS。",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0b1220",
+  "theme_color": "#0b1220",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

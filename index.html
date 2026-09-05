@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0b1220">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.webmanifest">
+<title>單車 GPS 降水地圖</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H" crossorigin="anonymous" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+  integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
+<style>
+  :root{
+    --panel-bg: rgba(255,255,255,.94);
+    --panel-fg: #16202e;
+    --panel-sub: #5b6b7f;
+    --accent: #1d6fe0;
+    --danger: #c62828;
+    --ok: #1b7a37;
+    --border: #d5dde8;
+    --btn-bg: #f0f4f9;
+  }
+  html,body{margin:0;height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans TC",sans-serif;
+    background:#0b1220;overscroll-behavior:none;-webkit-text-size-adjust:100%}
+  #map{position:fixed;inset:0;z-index:0;background:#0b1220}
+
+  /* 上緣狀態列 */
+  #top-bar{position:fixed;top:0;left:0;right:0;z-index:1200;display:flex;gap:8px;flex-wrap:wrap;
+    padding:calc(env(safe-area-inset-top) + 6px) 10px 6px;font-size:12px;color:#eaf0f8;
+    background:linear-gradient(#0b1220ee,#0b122000);pointer-events:none}
+  #top-bar .chip{background:#0b1220cc;border:1px solid #ffffff22;border-radius:999px;padding:3px 9px;white-space:nowrap}
+  #top-bar .chip b{color:#8fc0ff}
+
+  /* 下緣控制面板 */
+  #panel{position:fixed;left:0;right:0;bottom:0;z-index:1200;background:var(--panel-bg);color:var(--panel-fg);
+    border-top:1px solid var(--border);border-radius:16px 16px 0 0;
+    padding:10px 12px calc(env(safe-area-inset-bottom) + 10px);
+    box-shadow:0 -6px 24px #0006}
+  #overhead{font-size:14px;font-weight:800;margin-bottom:8px;line-height:1.4}
+  #overhead .dot{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:6px;vertical-align:middle;border:1px solid #0003}
+
+  .tl-row{display:flex;align-items:center;gap:10px}
+  #play{flex:0 0 auto;width:46px;height:46px;border-radius:50%;border:1px solid var(--border);background:var(--btn-bg);
+    font-size:20px;cursor:pointer;color:var(--accent);font-weight:900}
+  #slider{flex:1;height:34px}
+  input[type=range]{accent-color:var(--accent)}
+  #time-label{flex:0 0 auto;min-width:118px;text-align:right;font-size:13px;font-weight:800}
+  #time-label small{display:block;font-weight:600;color:var(--panel-sub);font-size:11px}
+
+  .ctl-row{display:flex;gap:7px;margin-top:9px;flex-wrap:wrap}
+  .ctl-row button{flex:1 1 auto;min-width:72px;padding:8px 6px;border-radius:9px;border:1px solid var(--border);
+    background:var(--btn-bg);font-size:12.5px;font-weight:700;cursor:pointer;color:var(--panel-fg)}
+  .ctl-row button.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+  /* 圖例 */
+  #legend{position:fixed;right:10px;bottom:210px;z-index:1200;background:var(--panel-bg);color:var(--panel-fg);
+    border:1px solid var(--border);border-radius:10px;padding:9px 11px;font-size:11.5px;line-height:1.5;box-shadow:0 4px 16px #0004}
+  #legend h4{margin:0 0 6px;font-size:12px}
+  #legend .row{display:flex;align-items:center;gap:6px;margin:2px 0}
+  #legend .sw{width:16px;height:12px;border-radius:2px;border:1px solid #0002}
+  #legend[hidden]{display:none}
+
+  /* toast */
+  #toast{position:fixed;left:50%;top:52px;transform:translateX(-50%);z-index:1500;
+    background:#0b1220ee;color:#fff;border:1px solid #ffffff33;border-radius:10px;padding:9px 14px;font-size:13px;
+    max-width:88vw;text-align:center;transition:opacity .3s;box-shadow:0 6px 20px #0007}
+  #toast[hidden]{display:none}
+
+  /* GPS 標記 */
+  .me-dot{width:18px;height:18px;background:var(--accent);border:3px solid #fff;border-radius:50%;box-shadow:0 0 0 1px #0004}
+  .me-head{position:absolute;left:50%;top:50%;width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;
+    border-bottom:16px solid var(--accent);transform-origin:50% 100%;margin:-20px 0 0 -7px;filter:drop-shadow(0 0 1px #fff)}
+  .ghost-dot{width:16px;height:16px;background:#ff8f00cc;border:2px dashed #fff;border-radius:50%;box-shadow:0 0 0 1px #0005}
+  .ghost-label{background:#ff8f00;color:#fff;font-size:11px;font-weight:800;padding:1px 5px;border-radius:5px;white-space:nowrap;
+    transform:translate(10px,-8px);box-shadow:0 1px 4px #0005}
+
+  .leaflet-control-attribution{font-size:9px}
+  @media (prefers-color-scheme: dark){
+    :root{--panel-bg:rgba(17,24,36,.95);--panel-fg:#e9eef5;--panel-sub:#93a2b5;--border:#2b3648;--btn-bg:#1c2636}
+  }
+</style>
+</head>
+<body>
+<div id="map"></div>
+
+<div id="top-bar">
+  <span class="chip" id="chip-gps">定位：<b>等待中…</b></span>
+  <span class="chip" id="chip-jma">JMA：<b>載入中…</b></span>
+  <span class="chip" id="chip-spd" hidden>速度：<b>—</b></span>
+</div>
+
+<div id="toast" hidden></div>
+
+<div id="legend" hidden>
+  <h4>降水強度（mm/h）</h4>
+  <div id="legend-rows"></div>
+  <div style="margin-top:6px;color:var(--panel-sub)">資料：気象庁 高解像度降水ナウキャスト／降水短時間予報</div>
+</div>
+
+<div id="panel">
+  <div id="overhead"><span class="dot" style="background:#ccc"></span>你頭上目前：<span id="overhead-txt">等待定位與雷達資料…</span></div>
+  <div class="tl-row">
+    <button id="play" aria-label="播放">▶</button>
+    <input type="range" id="slider" min="0" max="0" value="0" step="1" aria-label="時間軸">
+    <span id="time-label">—<small>—</small></span>
+  </div>
+  <div class="ctl-row">
+    <button id="btn-follow" class="on">📍 跟隨</button>
+    <button id="btn-now">⏱️ 回到現在</button>
+    <button id="btn-wake" class="on">💡 螢幕常亮</button>
+    <button id="btn-legend">🎨 圖例</button>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+/* ───────────────────────── 常數 ───────────────────────── */
+const JMA_BASE = 'https://www.jma.go.jp/bosai/jmatile/data';
+const TILE_OPACITY = 0.62;
+const SAMPLE_ZOOM = 10;             // 「你頭上目前」取樣用的固定 zoom
+const RADAR_REFRESH_MS = 150000;    // 每 2.5 分重抓 targetTimes
+const FUTURE_LIMIT_MS = 3 * 3600 * 1000;   // 未來上限 3h（rasrf 每小時一格，多留 1–2 格蓋滿 2h）
+const PAST_KEEP = 12;               // 觀測影格只留最近這麼多（每 5 分一格 = 60 分）
+
+// 気象庁 降水強度標準色階（實測 hrpns 圖磚的實際 RGB）：[R, G, B, 標籤(mm/h)]
+const JMA_SCALE = [
+  [242, 242, 255, '< 1'],
+  [160, 210, 255, '1–5'],
+  [ 33, 140, 255, '5–10'],
+  [  0,  65, 255, '10–20'],
+  [250, 245,   0, '20–30'],
+  [255, 153,   0, '30–50'],
+  [255,  40,   0, '50–80'],
+  [180,   0, 104, '80+'],
+];
+
+/* ───────────────────────── 狀態 ───────────────────────── */
+const state = {
+  pos: null,              // {lat, lon, acc, heading, speed, ts}
+  headingEMA: null,       // {s, c} 平滑用
+  followMode: true,
+  wakeWanted: true,
+  frames: [],             // [{kind:'hrpns'|'rasrf', basetime, validtime, ms, isForecast}]
+  idx: 0,
+  playing: false,
+  playTimer: null,
+  refreshTimer: null,
+  wakeLock: null,
+};
+
+/* ───────────────────────── 地圖 ───────────────────────── */
+const map = L.map('map', {zoomControl:false, attributionControl:true}).setView([35.36, 138.73], 9);
+L.control.zoom({position:'topright'}).addTo(map);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom: 19, attribution:'&copy; OpenStreetMap'
+}).addTo(map);
+
+let radarLayer = null;
+let meMarker = null, meAccCircle = null, ghostMarker = null;
+
+map.on('dragstart', () => setFollow(false));
+
+/* ───────────────────────── 小工具 ───────────────────────── */
+function toast(msg, ms=3200){
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.hidden = false; t.style.opacity = '1';
+  clearTimeout(toast._t);
+  if(ms) toast._t = setTimeout(() => { t.style.opacity='0'; setTimeout(()=>t.hidden=true, 320); }, ms);
+}
+function pad(n){ return String(n).padStart(2,'0'); }
+const JST_FMT = new Intl.DateTimeFormat('ja-JP', {timeZone:'Asia/Tokyo', hour:'2-digit', minute:'2-digit', hour12:false});
+function jstLabel(ms){ return JST_FMT.format(new Date(ms)); }
+function parseJmaTime(s){
+  // "20260905133500" -> Date（該字串為 UTC）
+  return Date.UTC(+s.slice(0,4), +s.slice(4,6)-1, +s.slice(6,8), +s.slice(8,10), +s.slice(10,12), +s.slice(12,14) || 0);
+}
+
+/* ───────────────────────── GPS 定位 ───────────────────────── */
+function smoothHeading(deg){
+  if(deg == null || isNaN(deg)) return state.headingEMA
+    ? Math.atan2(state.headingEMA.s, state.headingEMA.c) * 180/Math.PI : null;
+  const r = deg * Math.PI/180, a = 0.4;
+  if(!state.headingEMA){ state.headingEMA = {s:Math.sin(r), c:Math.cos(r)}; }
+  else {
+    state.headingEMA.s = a*Math.sin(r) + (1-a)*state.headingEMA.s;
+    state.headingEMA.c = a*Math.cos(r) + (1-a)*state.headingEMA.c;
+  }
+  let out = Math.atan2(state.headingEMA.s, state.headingEMA.c) * 180/Math.PI;
+  return (out + 360) % 360;
+}
+
+function onPos(p){
+  const c = p.coords;
+  state.pos = {
+    lat: c.latitude, lon: c.longitude, acc: c.accuracy,
+    heading: smoothHeading(c.heading), speed: (c.speed != null && !isNaN(c.speed)) ? c.speed : null,
+    ts: p.timestamp,
+  };
+  const ll = [c.latitude, c.longitude];
+
+  if(!meMarker){
+    meMarker = L.marker(ll, {icon: L.divIcon({className:'', html:'<div class="me-dot"></div><div class="me-head" id="me-head"></div>', iconSize:[18,18], iconAnchor:[9,9]}), zIndexOffset:1000}).addTo(map);
+    meAccCircle = L.circle(ll, {radius:c.accuracy, color:'#1d6fe0', weight:1, opacity:.4, fillOpacity:.08}).addTo(map);
+    map.setView(ll, 14);
+  } else {
+    meMarker.setLatLng(ll);
+    meAccCircle.setLatLng(ll).setRadius(c.accuracy);
+  }
+  const head = document.getElementById('me-head');
+  if(head) head.style.transform = state.pos.heading != null
+    ? `rotate(${state.pos.heading}deg)` : 'scale(0)';
+
+  if(state.followMode) map.panTo(ll, {animate:true, duration:.5});
+
+  document.getElementById('chip-gps').innerHTML = '定位：<b>±' + Math.round(c.accuracy) + ' m</b>';
+  const spdChip = document.getElementById('chip-spd');
+  if(state.pos.speed != null){
+    spdChip.hidden = false;
+    spdChip.innerHTML = '速度：<b>' + (state.pos.speed*3.6).toFixed(1) + ' km/h</b>';
+  } else spdChip.hidden = true;
+
+  updateGhost();
+  updateOverhead();
+}
+function onPosErr(e){
+  const msg = e.code === 1 ? '定位權限被拒 —— 請到瀏覽器設定開啟此網站的定位權限'
+            : e.code === 2 ? '目前收不到定位訊號（室內／隧道？）'
+            : '定位逾時，重試中…';
+  document.getElementById('chip-gps').innerHTML = '定位：<b style="color:#ff9a9a">失敗</b>';
+  toast('⚠️ ' + msg, 5000);
+}
+function startGeo(){
+  if(!('geolocation' in navigator)){ toast('此瀏覽器不支援定位'); return; }
+  navigator.geolocation.watchPosition(onPos, onPosErr, {
+    enableHighAccuracy:true, maximumAge:2000, timeout:15000
+  });
+}
+
+/* ───────────────────────── 推算位置幽靈點 ───────────────────────── */
+function destPoint(lat, lon, bearingDeg, distM){
+  const R = 6371000, d = distM / R, br = bearingDeg * Math.PI/180;
+  const φ1 = lat*Math.PI/180, λ1 = lon*Math.PI/180;
+  const φ2 = Math.asin(Math.sin(φ1)*Math.cos(d) + Math.cos(φ1)*Math.sin(d)*Math.cos(br));
+  const λ2 = λ1 + Math.atan2(Math.sin(br)*Math.sin(d)*Math.cos(φ1), Math.cos(d) - Math.sin(φ1)*Math.sin(φ2));
+  return [φ2*180/Math.PI, ((λ2*180/Math.PI)+540)%360 - 180];
+}
+function updateGhost(){
+  const f = state.frames[state.idx];
+  const p = state.pos;
+  if(ghostMarker){ map.removeLayer(ghostMarker); ghostMarker = null; }
+  if(!f || !f.isForecast || !p) return;
+
+  const minsAhead = Math.round((f.ms - Date.now()) / 60000);
+  if(minsAhead <= 0) return;
+
+  if(p.speed == null || p.speed < 0.5 || p.heading == null){
+    // 靜止或無方向：幽靈點疊在現在位置
+    ghostMarker = L.marker([p.lat, p.lon], {icon: L.divIcon({className:'', html:
+      '<div class="ghost-dot"></div><div class="ghost-label">+' + minsAhead + '分 · 靜止中無法推算前方</div>',
+      iconSize:[16,16], iconAnchor:[8,8]}), zIndexOffset:900}).addTo(map);
+    return;
+  }
+  const dist = p.speed * minsAhead * 60;
+  const [glat, glon] = destPoint(p.lat, p.lon, p.heading, dist);
+  ghostMarker = L.marker([glat, glon], {icon: L.divIcon({className:'', html:
+    '<div class="ghost-dot"></div><div class="ghost-label">+' + minsAhead + '分 · 約 ' + (dist/1000).toFixed(1) + ' km 後</div>',
+    iconSize:[16,16], iconAnchor:[8,8]}), zIndexOffset:900}).addTo(map);
+}
+
+/* ───────────────────────── JMA 雷達圖層 ───────────────────────── */
+function tileUrl(f){
+  const el = f.kind;                       // hrpns / rasrf
+  const sub = el === 'rasrf' ? 'rasrf' : 'hrpns';
+  return `${JMA_BASE}/${el === 'rasrf' ? 'rasrf' : 'nowc'}/${f.basetime}/none/${f.validtime}/surf/${sub}/{z}/{x}/{y}.png`;
+}
+async function loadRadarIndex(){
+  try{
+    const [n1, n2, rf] = await Promise.all([
+      fetch(`${JMA_BASE}/nowc/targetTimes_N1.json`).then(r=>r.json()),
+      fetch(`${JMA_BASE}/nowc/targetTimes_N2.json`).then(r=>r.json()),
+      fetch(`${JMA_BASE}/rasrf/targetTimes.json`).then(r=>r.json()),
+    ]);
+    const now = Date.now();
+    const mk = (o, kind) => ({
+      kind, basetime:o.basetime, validtime:o.validtime,
+      ms: parseJmaTime(o.validtime),
+      isForecast: o.validtime !== o.basetime,
+    });
+    // 觀測（hrpns，N1）：只留最近 60 分
+    const obs = n1.map(o => mk(o,'hrpns'))
+      .filter(f => f.ms <= now + 60000).sort((a,b)=>a.ms-b.ms).slice(-PAST_KEEP);
+    // 未來 0–60 分（hrpns，N2 單一 run）
+    const fc1 = n2.map(o => mk(o,'hrpns')).filter(f => f.isForecast && f.ms > now).sort((a,b)=>a.ms-b.ms);
+    const lastFc1 = fc1.length ? fc1[fc1.length-1].ms : now + 60000;
+    // 未來 60 分–3h（rasrf 降水短時間予報）：挑最新的「予報 run」basetime，只取它的未來 validtime
+    const rfByBt = {};
+    rf.forEach(o => { (rfByBt[o.basetime] = rfByBt[o.basetime] || []).push(o); });
+    const fcBts = Object.keys(rfByBt).filter(bt => rfByBt[bt].some(o => o.validtime > bt)).sort();
+    const rfRun = fcBts.length ? rfByBt[fcBts[fcBts.length-1]] : [];
+    const fc2 = rfRun.map(o => mk(o,'rasrf'))
+      .filter(f => f.isForecast && f.ms > lastFc1 && f.ms <= now + FUTURE_LIMIT_MS)
+      .sort((a,b)=>a.ms-b.ms);
+
+    const frames = [...obs, ...fc1, ...fc2].sort((a,b)=>a.ms-b.ms);
+    // 去重（同 ms 取 hrpns 優先）
+    const seen = new Set(), dedup = [];
+    for(const f of frames){ const k = f.ms; if(seen.has(k)) continue; seen.add(k); dedup.push(f); }
+
+    if(!dedup.length) throw new Error('無可用影格');
+    state.frames = dedup;
+
+    const best = nowFrameIdx();
+    state.idx = best;
+
+    const slider = document.getElementById('slider');
+    slider.max = dedup.length - 1;
+    slider.value = best;
+
+    const updMs = obs.length ? Math.max(...obs.map(f=>f.ms)) : now;
+    document.getElementById('chip-jma').innerHTML = 'JMA：<b>' + jstLabel(updMs) + ' 更新</b>';
+    showFrame(best);
+  }catch(err){
+    document.getElementById('chip-jma').innerHTML = 'JMA：<b style="color:#ff9a9a">失敗</b>';
+    toast('⚠️ 取不到 JMA 雷達資料（' + err.message + '）。可能離線，或 JMA 端點格式變了。', 6000);
+  }
+}
+/* 「現在」的影格 = 最後一張觀測（不是 +2 分的預報） */
+function nowFrameIdx(){
+  let last = 0;
+  state.frames.forEach((f,i) => { if(!f.isForecast) last = i; });
+  return last;
+}
+function showFrame(i){
+  if(!state.frames.length) return;
+  state.idx = Math.max(0, Math.min(state.frames.length-1, i));
+  document.getElementById('slider').value = state.idx;
+  const f = state.frames[state.idx];
+
+  if(radarLayer) map.removeLayer(radarLayer);
+  radarLayer = L.tileLayer(tileUrl(f), {
+    opacity: TILE_OPACITY, zIndex: 400, crossOrigin: 'anonymous',
+    maxNativeZoom: f.kind === 'rasrf' ? 8 : 10, maxZoom: 19,
+  }).addTo(map);
+
+  const now = Date.now();
+  const diffMin = Math.round((f.ms - now)/60000);
+  const lab = document.getElementById('time-label');
+  let sub;
+  if(!f.isForecast) sub = '觀測';
+  else if(f.kind === 'rasrf') sub = '短時間予報 · 較粗';
+  else sub = '予報';
+  const rel = diffMin === 0 ? '現在' : (diffMin > 0 ? '+' + diffMin + '分' : diffMin + '分');
+  lab.innerHTML = jstLabel(f.ms) + '<small>' + rel + ' · ' + sub + '</small>';
+
+  updateGhost();
+  updateOverhead();
+}
+
+/* ───────────────────────── 「你頭上目前」 ───────────────────────── */
+function lonlat2tile(lat, lon, z){
+  const n = 2**z;
+  const x = (lon + 180) / 360 * n;
+  const yr = Math.log(Math.tan(lat*Math.PI/180) + 1/Math.cos(lat*Math.PI/180));
+  const y = (1 - yr/Math.PI) / 2 * n;
+  return {xt:Math.floor(x), yt:Math.floor(y), fx:x-Math.floor(x), fy:y-Math.floor(y)};
+}
+function classifyRGB(r,g,b,a){
+  if(a < 24) return null;
+  let bestI = -1, bestD = Infinity;
+  JMA_SCALE.forEach((row,i) => {
+    const d = (row[0]-r)**2 + (row[1]-g)**2 + (row[2]-b)**2;
+    if(d < bestD){ bestD = d; bestI = i; }
+  });
+  return bestD < 2500 ? bestI : null;
+}
+let overheadReq = 0;
+function updateOverhead(){
+  const p = state.pos, f = state.frames[state.idx];
+  const txt = document.getElementById('overhead-txt');
+  const dot = document.querySelector('#overhead .dot');
+  if(!p || !f){ return; }
+  const myReq = ++overheadReq;
+  const sz = f.kind === 'rasrf' ? 8 : SAMPLE_ZOOM;   // rasrf 圖磚只到 z8
+  const {xt, yt, fx, fy} = lonlat2tile(p.lat, p.lon, sz);
+  const url = tileUrl(f)
+    .replace('{z}', sz).replace('{x}', xt).replace('{y}', yt);
+  const img = new Image();
+  img.crossOrigin = 'anonymous';
+  img.onload = () => {
+    if(myReq !== overheadReq) return;
+    try{
+      const cv = document.createElement('canvas'); cv.width = img.width; cv.height = img.height;
+      const ctx = cv.getContext('2d'); ctx.drawImage(img, 0, 0);
+      const px = ctx.getImageData(Math.floor(fx*img.width), Math.floor(fy*img.height), 1, 1).data;
+      const band = classifyRGB(px[0], px[1], px[2], px[3]);
+      const when = f.isForecast ? ('（' + jstLabel(f.ms) + ' 預報）') : '';
+      if(band == null){
+        dot.style.background = '#cfd8e3';
+        txt.textContent = '無降水 ' + when;
+      } else {
+        dot.style.background = `rgb(${JMA_SCALE[band][0]},${JMA_SCALE[band][1]},${JMA_SCALE[band][2]})`;
+        const name = band <= 1 ? '小雨' : band <= 3 ? '中雨' : band <= 5 ? '大雨' : '劇烈降雨';
+        txt.textContent = name + '（' + JMA_SCALE[band][3] + ' mm/h）' + when;
+      }
+    }catch(_){
+      txt.textContent = '（無法讀取該點雨量，看地圖上的點位）';
+    }
+  };
+  img.onerror = () => { if(myReq === overheadReq) txt.textContent = '（雨量圖磚載入失敗）'; };
+  img.src = url;
+}
+
+/* ───────────────────────── 播放 / 控制 ───────────────────────── */
+function setFollow(on){
+  state.followMode = on;
+  document.getElementById('btn-follow').classList.toggle('on', on);
+  if(on && state.pos) map.panTo([state.pos.lat, state.pos.lon]);
+}
+function togglePlay(){
+  state.playing = !state.playing;
+  document.getElementById('play').textContent = state.playing ? '⏸' : '▶';
+  clearInterval(state.playTimer);
+  if(state.playing){
+    state.playTimer = setInterval(() => {
+      let n = state.idx + 1;
+      if(n >= state.frames.length) n = 0;
+      showFrame(n);
+    }, 750);
+  }
+}
+async function requestWake(){
+  if(!('wakeLock' in navigator)) return;
+  try{
+    state.wakeLock = await navigator.wakeLock.request('screen');
+    state.wakeLock.addEventListener('release', () => { state.wakeLock = null; });
+  }catch(_){ /* 被拒或不支援就算了 */ }
+}
+function toggleWake(){
+  state.wakeWanted = !state.wakeWanted;
+  document.getElementById('btn-wake').classList.toggle('on', state.wakeWanted);
+  if(state.wakeWanted) requestWake();
+  else if(state.wakeLock){ state.wakeLock.release(); state.wakeLock = null; }
+}
+document.addEventListener('visibilitychange', () => {
+  if(document.visibilityState === 'visible' && state.wakeWanted && !state.wakeLock) requestWake();
+});
+
+/* 圖例 */
+(function buildLegend(){
+  const box = document.getElementById('legend-rows');
+  box.innerHTML = JMA_SCALE.map(r =>
+    `<div class="row"><span class="sw" style="background:rgb(${r[0]},${r[1]},${r[2]})"></span>${r[3]}</div>`
+  ).join('');
+})();
+
+/* 綁定 */
+document.getElementById('play').onclick = togglePlay;
+document.getElementById('slider').oninput = e => {
+  if(state.playing) togglePlay();
+  showFrame(+e.target.value);
+  // 拉到未來且幽靈點跑出畫面 → 一次性把「我」和「幽靈點」都框進來
+  if(ghostMarker && state.pos){
+    const gll = ghostMarker.getLatLng();
+    if(!map.getBounds().pad(-0.15).contains(gll)){
+      setFollow(false);
+      map.fitBounds(L.latLngBounds([[state.pos.lat, state.pos.lon], [gll.lat, gll.lng]]), {padding:[60,60], maxZoom:15});
+    }
+  }
+};
+document.getElementById('btn-follow').onclick = () => setFollow(!state.followMode);
+document.getElementById('btn-now').onclick = () => {
+  if(state.playing) togglePlay();
+  showFrame(nowFrameIdx());
+  if(state.pos) setFollow(true);
+};
+document.getElementById('btn-wake').onclick = toggleWake;
+document.getElementById('btn-legend').onclick = () => {
+  const l = document.getElementById('legend'); l.hidden = !l.hidden;
+  document.getElementById('btn-legend').classList.toggle('on', !l.hidden);
+};
+
+/* ───────────────────────── 啟動 ───────────────────────── */
+startGeo();
+loadRadarIndex();
+requestWake();
+state.refreshTimer = setInterval(loadRadarIndex, RADAR_REFRESH_MS);
+</script>
+</body>
+</html>
