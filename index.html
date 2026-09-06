@@ -33,6 +33,8 @@
     background:linear-gradient(#0b1220ee,#0b122000);pointer-events:none}
   #top-bar .chip{background:#0b1220cc;border:1px solid #ffffff22;border-radius:999px;padding:3px 9px;white-space:nowrap}
   #top-bar .chip b{color:#8fc0ff}
+  #top-bar a.chip{pointer-events:auto;color:#8fc0ff;text-decoration:none}
+  #top-bar a.chip:active{background:#1c2636}
 
   /* 下緣控制面板 */
   #panel{position:fixed;left:0;right:0;bottom:0;z-index:1200;background:var(--panel-bg);color:var(--panel-fg);
@@ -91,6 +93,7 @@
   <span class="chip" id="chip-gps">定位：<b>等待中…</b></span>
   <span class="chip" id="chip-jma">JMA：<b>載入中…</b></span>
   <span class="chip" id="chip-spd" hidden>速度：<b>—</b></span>
+  <a class="chip" href="https://riding.braintaiwan.com/radar-map.html" target="_blank" rel="noopener">🌏 全域雷達 ↗</a>
 </div>
 
 <div id="toast" hidden></div>
