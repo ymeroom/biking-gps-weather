@@ -31,6 +31,8 @@
 
 ## 技術
 
+> 完整的製作、架構、資料源、失敗模式與維護說明見 [`DEVELOPMENT.md`](DEVELOPMENT.md)。
+
 - 單一 `index.html`，無 build step。Leaflet 1.9.4 + OpenStreetMap 底圖。
 - JMA 圖磚端點（官方網站自用、無公開文件）：
   - `https://www.jma.go.jp/bosai/jmatile/data/nowc/{basetime}/none/{validtime}/surf/hrpns/{z}/{x}/{y}.png`
